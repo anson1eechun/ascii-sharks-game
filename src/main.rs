@@ -8,84 +8,28 @@ mod game;
 mod grid;
 mod input;
 mod math;
+mod menu;
 mod renderer;
 mod screen;
+mod setup;
 mod species;
 mod term;
 #[cfg(test)]
 mod tests;
+mod ui;
 mod world;
 
 use std::process::exit;
 
 use app::{App, Scene, Settings};
-use cli::{Options, fail, t};
+use cli::{fail, t};
 use game::Game;
+use menu::Menu;
 use renderer::Renderer;
 use screen::{ColorMode, Screen};
-use world::{SharkKind, SharkSpec, World};
+use setup::Setup;
 
 const FALLBACK_ASPECT: f64 = 2.1;
-const MIN_SIZE: f64 = 0.55;
-
-/// All different, and none of them `except`, while there are enough kinds to go round.
-fn random_kinds(n: usize, except: Option<SharkKind>) -> Vec<SharkKind> {
-    let mut kinds = SharkKind::ALL.to_vec();
-    kinds.retain(|&k| Some(k) != except);
-    for i in (1..kinds.len()).rev() {
-        kinds.swap(i, (math::random() * (i + 1) as f64) as usize);
-    }
-    (0..n)
-        .map(|i| {
-            kinds
-                .get(i)
-                .copied()
-                .unwrap_or_else(|| kinds[(math::random() * kinds.len() as f64) as usize])
-        })
-        .collect()
-}
-
-/// One shark at full size, the rest smaller. Size doubles as depth: smaller
-/// sharks swim deeper and dimmer.
-fn random_sizes(kinds: &[SharkKind]) -> Vec<SharkSpec> {
-    let biggest = (math::random() * kinds.len() as f64) as usize;
-    kinds
-        .iter()
-        .enumerate()
-        .map(|(i, &kind)| SharkSpec {
-            kind,
-            size: if i == biggest {
-                1.0
-            } else {
-                math::rand(MIN_SIZE, 1.0)
-            },
-            player: false,
-        })
-        .collect()
-}
-
-fn scene(opts: &Options, aspect: f64) -> Scene {
-    let zh = cli::zh() && !opts.ascii;
-    let player = opts.shark.unwrap_or_else(|| random_kinds(1, None)[0]);
-    let others = opts
-        .others
-        .clone()
-        .unwrap_or_else(|| random_kinds(opts.count, Some(player)));
-    let mut sharks = random_sizes(&others);
-    sharks.push(SharkSpec {
-        kind: player,
-        size: game::START_SIZE,
-        player: true,
-    });
-    let mut renderer = Renderer::new();
-    renderer.calm = opts.calm;
-    Scene {
-        world: World::new(sharks, opts.fish),
-        game: Game::new(player, zh),
-        renderer,
-        aspect,
-    }
-}
 
 fn main() {
     let opts = cli::parse();
@@ -111,12 +55,36 @@ fn main() {
     }
     let probe = term::probe();
     let aspect = opts.aspect.or(probe.aspect).unwrap_or(FALLBACK_ASPECT);
+    let ascii = opts.ascii || probe.wide_ambiguous;
+    let zh = cli::zh() && !opts.ascii;
+    let kind = opts
+        .shark
+        .unwrap_or_else(|| setup::random_kinds(1, None)[0]);
+    let rivals = opts.others.as_ref().map_or(opts.count, Vec::len);
+    let setup = Setup {
+        others: opts.others.clone(),
+        fish: opts.fish,
+    };
+    let mut menu = Menu::new(kind, rivals, zh, !ascii);
+    let player = opts.play.then_some(kind);
+    if opts.play {
+        menu.close();
+    }
+    let mut renderer = Renderer::new();
+    renderer.calm = opts.calm;
+    let scene = Scene {
+        world: setup.sea(player, rivals),
+        game: player.map(|kind| Game::new(kind, zh)),
+        renderer,
+        aspect,
+    };
     let settings = Settings {
         fps: opts.fps,
         speed: opts.speed,
+        zh,
     };
-    let screen = Screen::new(color, opts.ascii || probe.wide_ambiguous);
-    let result = App::new(scene(&opts, aspect), settings, screen).run();
+    let screen = Screen::new(color, ascii);
+    let result = App::new(scene, setup, menu, settings, screen).run();
     term::leave();
     if let Err(e) = result {
         eprintln!("sharks-game: {e}");

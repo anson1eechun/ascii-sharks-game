@@ -5,9 +5,12 @@ use crate::game::Game;
 use crate::grid::Grid;
 use crate::input::{self, Arrow, Input, MOUSE_BUTTONS, MOUSE_MOTION, MOUSE_WHEEL};
 use crate::math::{clamp, js_round};
+use crate::menu::{Action, Menu, Page};
 use crate::renderer::Renderer;
 use crate::screen::Screen;
+use crate::setup::Setup;
 use crate::term;
+use crate::ui;
 use crate::world::World;
 
 pub const STEP: f64 = 1.0 / 60.0;
@@ -36,7 +39,8 @@ fn steps_for(acc: &mut f64, dt: f64) -> u32 {
 
 pub struct Scene {
     pub world: World,
-    pub game: Game,
+    /// None while the title screen shows the sea without you.
+    pub game: Option<Game>,
     pub renderer: Renderer,
     pub aspect: f64,
 }
@@ -61,43 +65,55 @@ impl Scene {
 
     fn render(&mut self, dt: f64, grid: &mut Grid) {
         self.renderer.render(&mut self.world, dt, grid);
-        self.game.draw(&self.world, grid);
+        if let Some(game) = &self.game {
+            game.draw(&self.world, grid);
+        }
     }
 }
 
 pub struct Settings {
     pub fps: f64,
     pub speed: f64,
+    pub zh: bool,
 }
 
 pub struct App {
     scene: Scene,
+    setup: Setup,
+    menu: Menu,
+    zh: bool,
     speed: f64,
     grid: Grid,
+    /// The frozen game behind the pause menu.
+    backdrop: Grid,
     screen: Screen,
     cell: Option<(f64, f64)>,
-    paused: bool,
     frame: Duration,
     last: Instant,
     next: Instant,
+    drawn: Instant,
     acc: f64,
     pending: Vec<u8>,
     inputs: Vec<Input>,
 }
 
 impl App {
-    pub fn new(scene: Scene, settings: Settings, screen: Screen) -> Self {
+    pub fn new(scene: Scene, setup: Setup, menu: Menu, settings: Settings, screen: Screen) -> Self {
         let now = Instant::now();
         App {
             scene,
+            setup,
+            menu,
+            zh: settings.zh,
             speed: settings.speed,
             frame: Duration::from_secs_f64(1.0 / settings.fps),
             grid: Grid::new(),
+            backdrop: Grid::new(),
             screen,
             cell: None,
-            paused: false,
             last: now,
             next: now,
+            drawn: now,
             acc: 0.0,
             pending: Vec::new(),
             inputs: Vec::new(),
@@ -110,11 +126,35 @@ impl App {
         self.scene.resize(cols, rows, cell);
         self.grid.resize(cols, rows);
         self.screen.reset(cols * rows);
-        if self.paused { self.draw(0.0) } else { Ok(()) }
+        if self.menu.frozen() {
+            self.backdrop.resize(cols, rows);
+            self.scene.render(0.0, &mut self.backdrop);
+            ui::veil(&mut self.backdrop, 0.42, 0.55);
+            self.draw(0.0)?;
+        }
+        Ok(())
     }
 
     fn draw(&mut self, dt: f64) -> io::Result<()> {
-        self.scene.render(dt, &mut self.grid);
+        let now = Instant::now();
+        let real = (now - self.drawn).as_secs_f64().min(0.1);
+        self.drawn = now;
+        if self.menu.frozen() {
+            self.grid.clone_from(&self.backdrop);
+        } else {
+            self.scene.render(dt, &mut self.grid);
+            if self.menu.page.is_some() {
+                ui::veil(&mut self.grid, 0.55, 0.3);
+            }
+        }
+        if let Some(cell) = self.cell {
+            let stats = self
+                .scene
+                .game
+                .as_ref()
+                .map(|g| g.summary(&self.scene.world));
+            self.menu.draw(&mut self.grid, real, cell, stats.as_deref());
+        }
         self.screen.flush(&self.grid)
     }
 
@@ -127,7 +167,9 @@ impl App {
         for _ in 0..steps_for(&mut self.acc, dt) {
             self.scene.world.step(STEP);
         }
-        self.scene.game.update(&mut self.scene.world, dt);
+        if let Some(game) = &mut self.scene.game {
+            game.update(&mut self.scene.world, dt);
+        }
         self.draw(dt)
     }
 
@@ -148,8 +190,8 @@ impl App {
                 self.layout()?;
             }
 
-            let timeout = if self.paused {
-                None
+            let timeout = if self.menu.frozen() {
+                self.menu.moving().then_some(self.frame)
             } else {
                 let now = Instant::now();
                 if now >= self.next {
@@ -161,8 +203,12 @@ impl App {
                 }
                 Some(self.next.saturating_duration_since(Instant::now()))
             };
-            if term::wait_input(timeout) && self.read_input()? {
-                return Ok(());
+            if term::wait_input(timeout) {
+                if self.read_input()? {
+                    return Ok(());
+                }
+            } else if self.menu.frozen() && timeout.is_some() {
+                self.draw(0.0)?;
             }
         }
     }
@@ -197,23 +243,35 @@ impl App {
             }
         }
         for i in 0..self.inputs.len() {
-            if self.apply(i)? {
+            if self.apply(self.inputs[i])? {
                 return Ok(true);
             }
+        }
+        if self.menu.frozen() {
+            self.draw(0.0)?;
         }
         Ok(false)
     }
 
-    fn apply(&mut self, i: usize) -> io::Result<bool> {
-        let arrow = match self.inputs[i] {
-            Input::Key(b'q' | b'Q' | CTRL_C) | Input::Esc => return Ok(true),
+    fn apply(&mut self, input: Input) -> io::Result<bool> {
+        match input {
+            Input::Key(b'q' | b'Q' | CTRL_C) => return Ok(true),
             Input::Key(CTRL_Z) => {
                 term::suspend()?;
                 self.show()?;
                 return Ok(false);
             }
-            Input::Key(b'p' | b'P') => {
-                self.toggle_pause()?;
+            _ => {}
+        }
+        if self.menu.page.is_some() {
+            return match self.menu.input(input) {
+                Some(action) => self.act(action),
+                None => Ok(false),
+            };
+        }
+        let arrow = match input {
+            Input::Esc | Input::Key(b'p' | b'P') => {
+                self.pause();
                 return Ok(false);
             }
             Input::Key(b' ') => {
@@ -236,32 +294,60 @@ impl App {
             Input::Key(b'd' | b'D' | b'l' | b'L') => Arrow::Right,
             _ => return Ok(false),
         };
-        if !self.paused {
-            Game::steer(&mut self.scene.world, arrow);
+        Game::steer(&mut self.scene.world, arrow);
+        Ok(false)
+    }
+
+    fn act(&mut self, action: Action) -> io::Result<bool> {
+        match action {
+            Action::Quit => return Ok(true),
+            Action::Start | Action::Restart => self.play(),
+            Action::Resume => {
+                self.menu.close();
+                self.last = Instant::now();
+                self.next = self.last;
+            }
+            Action::Title => {
+                self.new_sea(false);
+                self.menu.open(Page::Title);
+            }
         }
         Ok(false)
     }
 
-    fn dash(&mut self) {
-        if !self.paused {
-            self.scene.game.dash(&mut self.scene.world);
+    /// Fills the sea afresh, with the player's shark in it or not.
+    fn new_sea(&mut self, playing: bool) {
+        let kind = self.menu.kind;
+        self.scene.world = self.setup.sea(playing.then_some(kind), self.menu.rivals);
+        self.scene.game = playing.then(|| Game::new(kind, self.zh));
+        if let Some(cell) = self.cell {
+            self.scene.resize(self.grid.cols, self.grid.rows, cell);
         }
-    }
-
-    fn toggle_pause(&mut self) -> io::Result<()> {
-        self.paused = !self.paused;
-        self.scene.game.paused = self.paused;
-        if self.paused {
-            return self.draw(0.0);
-        }
+        self.acc = 0.0;
         self.last = Instant::now();
         self.next = self.last;
-        Ok(())
+    }
+
+    fn play(&mut self) {
+        self.new_sea(true);
+        self.menu.close();
+    }
+
+    fn pause(&mut self) {
+        self.menu.open(Page::Pause);
+        self.backdrop.clone_from(&self.grid);
+        ui::veil(&mut self.backdrop, 0.42, 0.55);
+    }
+
+    fn dash(&mut self) {
+        if let Some(game) = &mut self.scene.game {
+            game.dash(&mut self.scene.world);
+        }
     }
 
     fn mouse(&mut self, button: u32, col: u32, row: u32, press: bool) {
         let Some((cw, ch)) = self.cell else { return };
-        if self.paused || button & MOUSE_WHEEL != 0 {
+        if button & MOUSE_WHEEL != 0 {
             return;
         }
         let (x, y) = ((col as f64 - 0.5) * cw, (row as f64 - 0.5) * ch);

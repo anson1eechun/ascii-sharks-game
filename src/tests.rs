@@ -1,6 +1,8 @@
 use super::*;
 use crate::app::STEP;
 use crate::grid::Grid;
+use crate::setup::{MIN_SIZE, random_kinds, random_sizes};
+use crate::world::{SharkKind, SharkSpec, World};
 
 /// The first shark is biggest, the rest step down.
 pub fn demo_sizes(kinds: &[SharkKind]) -> Vec<SharkSpec> {
@@ -121,7 +123,6 @@ fn tiny_and_odd_sizes_do_not_panic() {
             world.resize(cols as f64 * cw, rows as f64 * ch, cw, ch);
             grid.resize(cols, rows);
             let mut game = Game::new(SharkKind::Nurse, zh);
-            game.paused = true;
             Game::aim(&mut world, 6.0, 13.0);
             game.dash(&mut world);
             for _ in 0..3 {

@@ -5,16 +5,24 @@
 終端機裡的小遊戲：你是海裡最小的鯊魚，周圍有成群的魚，也有比你大的鯊魚。吃魚、長大，成為這片海裡最大的鯊魚。程式用 Rust 寫成，執行檔約 400 KB，不依賴任何套件，24-bit 全彩。畫面和魚群來自 [ascii-sharks-term](https://github.com/anson1eechun/ascii-sharks-term)，也就是 [stackedlol/ascii-sharks](https://github.com/stackedlol/ascii-sharks) 的終端機移植版。
 
 <p align="center">
+  <img src="docs/menu.zh-TW.svg" alt="sharks-game 的標題畫面：浮雕的 SHARKS 標誌、立體的選單面板，右邊有光照的預覽窗裡游著一隻尖吻鯖鯊，背景是調暗的海" width="100%">
+</p>
+
+<p align="center">
   <img src="docs/game.zh-TW.svg" alt="sharks-game：一隻有金色輪廓的尖吻鯖鯊追著魚群，頂端狀態列顯示吃了幾條魚和體型排名" width="100%">
 </p>
 
-<sub>由程式的渲染器逐幀錄製成 SVG，畫面中由自動駕駛操控。</sub>
+<sub>兩段都由程式的渲染器逐幀錄製成 SVG；遊戲畫面由自動駕駛操控。</sub>
 
 ## 怎麼玩
 
 ```sh
 sharks-game
 ```
+
+一開始是標題畫面，背景是正在動的海。選好你的鯊魚（牠會在右邊的窗裡游給你看）、要幾隻對手，再按「開始遊戲」。用 `sharks-game -p` 可以跳過標題畫面直接開始。
+
+選單用深度來呈現質感：面板像從上方打光的立體板子，底下有柔和的陰影；預覽窗是往下凹的，有光束照進水裡；標誌是浮雕字，表面用和鯊魚一樣的 ASCII 皮膚紋理；水面折射的光紋會在上面緩緩飄過。後面的海持續在動，只是調暗並加上暗角。
 
 你從最小的鯊魚開始。每吃一條魚身體就變長一點，越大長得越慢。頂端的狀態列會顯示體型、吃了幾條魚、你在所有鯊魚裡的體長排名，以及衝刺能不能用。超過其他所有鯊魚，你就是這片海裡最大的鯊魚，大約要玩幾分鐘。之後遊戲會繼續，你可以一直長下去。
 
@@ -23,9 +31,9 @@ sharks-game
 | 方向鍵、`WASD`、`hjkl` | 往那個方向游。鯊魚不會停下來，所以會一直往前游，直到你讓牠轉彎。 |
 | 滑鼠 | 你的鯊魚會游向游標，靠近時放慢。 |
 | 空白鍵、點擊 | 衝刺：半秒的爆發加速，每 2 秒可以用一次。 |
-| `p` | 暫停。 |
+| `Esc`、`p` | 暫停選單：繼續、重新開始、操作說明、回主選單、離開。 |
 | `Ctrl-Z` | 暫停到背景，用 `fg` 叫回來。 |
-| `q`、`Esc`、`Ctrl-C` | 離開。 |
+| `q`、`Ctrl-C` | 離開（在標題畫面按 `Esc` 也可以）。 |
 
 你的鯊魚有金色輪廓，開場前幾秒還會標上「你」。終端機收不到「放開按鍵」的事件，所以按鍵是設定方向，而不是要一直按著。
 
@@ -60,7 +68,8 @@ sharks-game --seed 7                 # 重玩同一片海
 
 | 遊戲 | |
 |---|---|
-| `-k, --shark <種類>` | 你的鯊魚，預設隨機。 |
+| `-p, --play` | 跳過標題畫面，直接開始。 |
+| `-k, --shark <種類>` | 你的鯊魚，預設隨機。標題畫面會先選在這一種。 |
 | `-o, --others <種類,...>` | 其他鯊魚，例如 `tiger,mako`。同一種可以重複。 |
 | `-n, --count <n>` | 其他鯊魚的數量，0～11，預設 3。有 `-o` 時不使用。 |
 | `--fish <n>` | 魚的數量，1～1000，預設依視窗大小決定。 |
@@ -106,6 +115,7 @@ sharks-game --seed 7                 # 重玩同一片海
 cargo test --release                                       # 單元測試，加上透過虛擬終端機實際操作遊戲
 cargo test --release balance -- --ignored --nocapture      # 看自動駕駛在各種視窗大小下長得多快
 SHARKS_DEMO=docs cargo test --release write_demos          # 重新產生 docs/ 裡的動畫
+SHARKS_STILL=/tmp cargo test --release still_of_the_game   # 把遊戲和每個選單頁面各輸出一張 SVG
 ```
 
 難度是用這個自動駕駛調出來的：它每秒看 4 次，朝附近最密的魚群游過去。在 90×28、140×40 和 200×55 的視窗裡，它大約 1～4 分鐘就會成為最大的鯊魚，有一個測試確保不超過 4 分鐘。可以調整的參數在 `src/world.rs` 的 `PLAYER_*`，以及 `src/game.rs` 的 `START_SIZE`、`FULL_SIZE` 和 `APPETITE`。
@@ -113,6 +123,9 @@ SHARKS_DEMO=docs cargo test --release write_demos          # 重新產生 docs/ 
 | 路徑 | |
 |---|---|
 | `src/game.rs` | 遊戲規則：轉向、衝刺、成長、排名、狀態列，以及測試用的自動駕駛 |
+| `src/menu.rs` | 標題、暫停和說明畫面，以及鯊魚預覽 |
+| `src/ui.rs` | 有深度的繪製：立體面板、陰影、凹窗、浮雕標誌、水光 |
+| `src/setup.rs` | 決定海裡有哪些鯊魚、各有多大 |
 | `src/world.rs` | 海：魚群、會獵食的鯊魚，以及玩家鯊魚怎麼游、怎麼咬 |
 | `src/renderer.rs` | 把鯊魚、魚和水波畫進字元格 |
 | `src/app.rs` | 畫面迴圈、鍵盤和滑鼠 |
@@ -122,7 +135,7 @@ SHARKS_DEMO=docs cargo test --release write_demos          # 重新產生 docs/ 
 | `src/grid.rs` | 所有內容都畫進去的字元格，支援寬字元 |
 | `src/cli.rs`、`main.rs` | 參數處理與串接 |
 | `src/demo.rs`、`docs/` | README 的動畫，CI 會檢查是否跟程式碼同步 |
-| `tests/` | 透過虛擬終端機實際操作執行檔：按鍵、暫停、縮放視窗、Ctrl-Z |
+| `tests/` | 透過虛擬終端機實際操作執行檔：標題選單、按鍵、暫停、縮放視窗、Ctrl-Z |
 
 ## 致謝
 

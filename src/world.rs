@@ -60,6 +60,43 @@ impl SharkKind {
         };
         if zh { zh_name } else { en }
     }
+
+    pub fn short(self, zh: bool) -> &'static str {
+        let (en, zh_name) = match self {
+            SharkKind::Classic => ("classic", "真鯊"),
+            SharkKind::Hammerhead => ("hammerhead", "雙髻鯊"),
+            SharkKind::GreatHammer => ("great hammer", "無溝雙髻鯊"),
+            SharkKind::Tiger => ("tiger", "虎鯊"),
+            SharkKind::Mako => ("mako", "尖吻鯖鯊"),
+            SharkKind::Thresher => ("thresher", "長尾鯊"),
+            SharkKind::Nurse => ("nurse", "鉸口鯊"),
+            SharkKind::Zebra => ("zebra", "豹紋鯊"),
+        };
+        if zh { zh_name } else { en }
+    }
+
+    pub fn blurb(self, zh: bool) -> &'static str {
+        let (en, zh_text) = match self {
+            SharkKind::Classic => ("blue-grey, the sea's all-rounder", "藍灰色，海裡的全能好手"),
+            SharkKind::Hammerhead => ("swept-back head, bronze-olive", "頭翼往後掠，古銅橄欖色"),
+            SharkKind::GreatHammer => (
+                "a wide notched head, towering fin",
+                "寬直的頭翼，高聳的背鰭",
+            ),
+            SharkKind::Tiger => ("blunt snout, barred back", "吻部方鈍，背上有條紋"),
+            SharkKind::Mako => ("torpedo body, metallic indigo", "魚雷般的身形，金屬靛藍色"),
+            SharkKind::Thresher => (
+                "a whip of a tail as long as itself",
+                "尾巴像一條和身體一樣長的鞭子",
+            ),
+            SharkKind::Nurse => (
+                "broad head, paddle fins, tawny",
+                "頭部寬闊，槳狀胸鰭，黃褐色",
+            ),
+            SharkKind::Zebra => ("spotted, with a ribbon tail", "滿身斑點，尾巴像長緞帶"),
+        };
+        if zh { zh_text } else { en }
+    }
 }
 
 #[derive(Clone, Copy)]

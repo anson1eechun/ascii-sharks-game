@@ -30,6 +30,24 @@ fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
     hay.windows(needle.len()).position(|w| w == needle)
 }
 
+/// What the screen shows, without the escape sequences between the glyphs.
+fn plain(out: &[u8]) -> Vec<u8> {
+    let mut text = Vec::with_capacity(out.len());
+    let mut i = 0;
+    while i < out.len() {
+        if out[i] == 0x1b && out.get(i + 1) == Some(&b'[') {
+            i += 2;
+            while i < out.len() && !(0x40..=0x7e).contains(&out[i]) {
+                i += 1;
+            }
+        } else {
+            text.push(out[i]);
+        }
+        i += 1;
+    }
+    text
+}
+
 fn window(cols: u16, rows: u16) -> libc::winsize {
     libc::winsize {
         ws_row: rows,
@@ -100,6 +118,19 @@ impl Term {
 
     fn len(&self) -> usize {
         self.out.0.lock().unwrap().len()
+    }
+
+    /// Waits until the screen shows `what` in the output after `from`.
+    fn wait_to_show(&self, what: &[u8], from: usize) {
+        let deadline = Instant::now() + PATIENCE;
+        while find(&plain(&self.output()[from..]), what).is_none() {
+            assert!(
+                Instant::now() < deadline,
+                "never showed {:?}",
+                String::from_utf8_lossy(what)
+            );
+            thread::sleep(Duration::from_millis(20));
+        }
     }
 
     /// Waits for `what` to appear at or after `from`; returns where it ends.
@@ -276,7 +307,7 @@ fn ctrl_z_suspends_and_sigcont_resumes() {
 
 #[test]
 fn pause_stops_the_frames_until_pressed_again() {
-    let mut term = Term::open(&["--seed", "4"], 80, 24, NARROW);
+    let mut term = Term::open(&["-p", "--seed", "4"], 80, 24, NARROW);
     let at = term.next_frame(0);
     term.send(b"p");
     thread::sleep(Duration::from_millis(150));
@@ -326,7 +357,7 @@ fn bad_options_fail_with_a_message() {
 
 #[test]
 fn shows_the_status_answers_the_keys_and_pauses() {
-    let mut term = Term::open(&["-k", "tiger", "--seed", "7"], 100, 30, NARROW);
+    let mut term = Term::open(&["-p", "-k", "tiger", "--seed", "7"], 100, 30, NARROW);
     let at = term.next_frame(0);
     let out = term.output();
     assert!(
@@ -348,8 +379,35 @@ fn shows_the_status_answers_the_keys_and_pauses() {
         at = term.next_frame(at);
     }
     term.send(b"p");
-    term.wait_for(b"paused", at);
+    term.wait_to_show(b"Paused", at);
     term.send(b"p");
     term.next_frame(term.len());
+    term.quit();
+}
+
+#[test]
+fn opens_on_the_title_menu_and_enter_starts() {
+    let mut term = Term::open(&["-k", "mako", "--seed", "8"], 120, 36, NARROW);
+    let at = term.next_frame(0);
+    let out = plain(&term.output());
+    for label in [
+        &b"Start"[..],
+        b"Your shark",
+        b"Rivals",
+        b"How to play",
+        b"mako",
+    ] {
+        assert!(
+            find(&out, label).is_some(),
+            "{}",
+            String::from_utf8_lossy(label)
+        );
+    }
+    assert!(find(&out, b"rank ").is_none(), "no game yet");
+    term.send(b"\r");
+    term.wait_to_show(b"rank 4/4", at);
+    let playing = term.len();
+    term.send(b"\x1b");
+    term.wait_to_show(b"Resume", playing);
     term.quit();
 }

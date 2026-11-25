@@ -1,8 +1,9 @@
 //! The rules: steering, dashes, growth, rank, and the status line.
 
-use crate::grid::{Grid, rgb, str_width};
+use crate::grid::{Grid, str_width};
 use crate::input::Arrow;
 use crate::math::{PI, clamp};
+use crate::ui::{DIM, GOLD, INK, PANEL};
 use crate::world::{Course, Shark, SharkKind, World};
 
 /// The player's size at the start and at most, as fractions of the biggest
@@ -18,15 +19,10 @@ const BANNER_SECONDS: f64 = 5.0;
 const GROW_RATE: f64 = 1.5;
 
 const BAR: usize = 10;
-const INK: u32 = rgb(235, 240, 250);
-const DIM: u32 = rgb(120, 130, 150);
-const PANEL: u32 = rgb(25, 32, 44);
-const GOLD: u32 = rgb(255, 196, 80);
 
 pub struct Game {
     kind: SharkKind,
     zh: bool,
-    pub paused: bool,
     start: Option<f64>,
     ready_at: f64,
     biggest_at: Option<f64>,
@@ -45,7 +41,6 @@ impl Game {
         Game {
             kind,
             zh,
-            paused: false,
             start: None,
             ready_at: 0.0,
             biggest_at: None,
@@ -118,9 +113,7 @@ impl Game {
         if time < HINT_SECONDS {
             self.tag(world, grid);
         }
-        if self.paused {
-            self.banner(grid, self.t("paused (p to go on)", "暫停中，按 p 繼續"));
-        } else if self.biggest_at.is_some_and(|at| time - at < BANNER_SECONDS) {
+        if self.biggest_at.is_some_and(|at| time - at < BANNER_SECONDS) {
             self.banner(
                 grid,
                 self.t(
@@ -129,10 +122,10 @@ impl Game {
                 ),
             );
         }
-        if time < HINT_SECONDS || self.paused {
+        if time < HINT_SECONDS {
             let hint = self.t(
-                "arrows/WASD steer · mouse leads · space/click dash · p pause · q quit",
-                "方向鍵/WASD 轉向 · 滑鼠帶路 · 空白鍵/點擊 衝刺 · p 暫停 · q 離開",
+                "arrows/WASD steer · mouse leads · space/click dash · Esc menu · q quit",
+                "方向鍵/WASD 轉向 · 滑鼠帶路 · 空白鍵/點擊 衝刺 · Esc 選單 · q 離開",
             );
             let row = grid.rows - 1;
             grid.put(
@@ -142,6 +135,17 @@ impl Game {
                 DIM,
                 None,
             );
+        }
+    }
+
+    /// Fish eaten and rank, for the pause menu.
+    pub fn summary(&self, world: &World) -> String {
+        let (place, of) = self.rank(world);
+        let eaten = world.helm.eaten;
+        if self.zh {
+            format!("吃了 {eaten} 條 · 第 {place} 大／共 {of} 隻")
+        } else {
+            format!("fish {eaten} · rank {place}/{of}")
         }
     }
 

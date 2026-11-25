@@ -5,16 +5,24 @@
 A game in your terminal: you are the smallest shark in a sea full of fish schools and bigger sharks. Eat fish, grow, and become the biggest shark in the sea. A small (~400 KB), dependency-free Rust program in 24-bit colour, built from [ascii-sharks-term](https://github.com/anson1eechun/ascii-sharks-term), the terminal port of [stackedlol/ascii-sharks](https://github.com/stackedlol/ascii-sharks).
 
 <p align="center">
+  <img src="docs/menu.svg" alt="sharks-game's title screen: an embossed SHARKS logo, a raised menu panel, and a shortfin mako swimming in a lit preview window, over the dimmed sea" width="100%">
+</p>
+
+<p align="center">
   <img src="docs/game.svg" alt="sharks-game: a shortfin mako with a gold outline chases a school of fish; the status line counts the fish it has eaten and its rank by size" width="100%">
 </p>
 
-<sub>Recorded from the renderer itself, frame by frame, as SVG, with an autopilot at the controls.</sub>
+<sub>Both recorded from the renderer itself, frame by frame, as SVG; an autopilot plays the game.</sub>
 
 ## How to play
 
 ```sh
 sharks-game
 ```
+
+The title screen opens over the live sea. Pick your shark (it swims in the window on the right), how many rivals you want, and **Start**. `sharks-game -p` skips straight into a game.
+
+The menus are drawn with depth: raised panels lit from above that cast soft shadows, a recessed preview window with shafts of light, an embossed logo textured with the same ASCII skin as the sharks, and caustic light drifting over all of it. The sea behind keeps moving, dimmed and vignetted.
 
 You start as the smallest shark. Every fish you eat makes you longer, and growth slows as you get bigger. The status line along the top shows your size, the fish you have eaten, your rank by length, and whether your dash is ready. Overtake every other shark to become the biggest in the sea; that takes a few minutes. The game carries on afterwards, so you can keep growing.
 
@@ -23,9 +31,9 @@ You start as the smallest shark. Every fish you eat makes you longer, and growth
 | Arrows, `WASD`, `hjkl` | Swim that way. Sharks never stop, so yours keeps going until you turn it. |
 | Mouse | Your shark heads for the pointer, slowing as it gets close. |
 | Space, click | Dash: a burst of speed for half a second, ready again every 2 s. |
-| `p` | Pause. |
+| `Esc`, `p` | Pause menu: resume, restart, how to play, main menu, quit. |
 | `Ctrl-Z` | Suspend; `fg` brings it back. |
-| `q`, `Esc`, `Ctrl-C` | Quit. |
+| `q`, `Ctrl-C` | Quit (on the title screen, `Esc` too). |
 
 Your shark has a gold outline, and is tagged for the first few seconds. A terminal never says when a key is let go, so the keys set a direction rather than being held down.
 
@@ -60,7 +68,8 @@ sharks-game --seed 7                 # the same sea again
 
 | Game | |
 |---|---|
-| `-k, --shark <kind>` | Your shark (default: random). |
+| `-p, --play` | Skip the title screen and start right away. |
+| `-k, --shark <kind>` | Your shark (default: random). The title screen starts on it. |
 | `-o, --others <kind,...>` | The other sharks, such as `tiger,mako`. You can repeat a kind. |
 | `-n, --count <n>` | How many other sharks, 0–11 (default 3). Ignored with `-o`. |
 | `--fish <n>` | How many fish, 1–1000 (default: by window size). |
@@ -106,6 +115,7 @@ In a 200×55 terminal on Apple Silicon, with four sharks and about 880 fish: aro
 cargo test --release                                       # unit tests, plus the game driven through a pseudo-terminal
 cargo test --release balance -- --ignored --nocapture      # how fast an autopilot grows, by window size
 SHARKS_DEMO=docs cargo test --release write_demos          # redraw the animations in docs/
+SHARKS_STILL=/tmp cargo test --release still_of_the_game   # single frames of the game and each menu page, as SVG
 ```
 
 The difficulty is tuned with that autopilot, which steers for the thickest school nearby four times a second: it becomes the biggest shark in about one to four minutes at 90×28, 140×40 and 200×55. A test keeps it under four minutes. The knobs are `PLAYER_*` in `src/world.rs` and `START_SIZE`, `FULL_SIZE` and `APPETITE` in `src/game.rs`.
@@ -113,6 +123,9 @@ The difficulty is tuned with that autopilot, which steers for the thickest schoo
 | Path | |
 |---|---|
 | `src/game.rs` | The rules: steering, dashes, growth, rank, the status line, and the autopilot used in tests |
+| `src/menu.rs` | The title, pause and help screens, and the shark preview |
+| `src/ui.rs` | Drawing with depth: slabs, shadows, wells, the embossed logo, caustics |
+| `src/setup.rs` | Which sharks share the sea, and how big they are |
 | `src/world.rs` | The sea: fish schools, the hunting sharks, and how the player's shark swims and bites |
 | `src/renderer.rs` | Sharks, fish and wakes drawn into cells |
 | `src/app.rs` | The frame loop, keyboard and mouse |
@@ -122,7 +135,7 @@ The difficulty is tuned with that autopilot, which steers for the thickest schoo
 | `src/grid.rs` | The cell grid everything draws into, with wide-glyph support |
 | `src/cli.rs`, `main.rs` | Options and wiring |
 | `src/demo.rs`, `docs/` | The README animations. CI checks they are up to date |
-| `tests/` | The binary driven through a pseudo-terminal: keys, pause, resizing, Ctrl-Z |
+| `tests/` | The binary driven through a pseudo-terminal: the title menu, keys, pause, resizing, Ctrl-Z |
 
 ## Credits
 

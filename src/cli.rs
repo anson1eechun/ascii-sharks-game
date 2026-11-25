@@ -13,6 +13,7 @@ const HELP_EN: &str = "sharks-game — eat fish, grow, and become the biggest sh
 Usage: sharks-game [options]
 
 Game
+  -p, --play               Skip the title screen and start right away
   -k, --shark <kind>       Your shark (default: random; -l lists them)
   -o, --others <kind,...>  The other sharks (default: random kinds)
   -n, --count <n>          How many other sharks, 0–11 (default 3)
@@ -34,9 +35,9 @@ Controls
   arrows, WASD, hjkl  swim that way
   mouse               your shark follows the pointer
   space, click        dash
-  p                   pause
+  Esc, p              menu
   Ctrl-Z              suspend
-  q, Esc              quit
+  q                   quit (Esc too, on the title screen)
 
 Messages follow the locale; set SHARKS_LANG=zh-TW for Chinese.";
 
@@ -45,6 +46,7 @@ const HELP_ZH: &str = "sharks-game — 吃魚、長大，成為這片海裡最�
 用法: sharks-game [選項]
 
 遊戲
+  -p, --play               跳過標題畫面，直接開始
   -k, --shark <種類>       你的鯊魚（預設隨機；用 -l 看清單）
   -o, --others <種類,...>  其他鯊魚（預設隨機挑選）
   -n, --count <n>          其他鯊魚的數量，0～11（預設 3）
@@ -66,9 +68,9 @@ const HELP_ZH: &str = "sharks-game — 吃魚、長大，成為這片海裡最�
   方向鍵、WASD、hjkl  往那個方向游
   滑鼠                你的鯊魚跟著游標游
   空白鍵、點擊        衝刺
-  p                   暫停
+  Esc、p              選單
   Ctrl-Z              暫停到背景
-  q、Esc              離開
+  q                   離開（在標題畫面按 Esc 也可以）
 
 訊息語言依語系而定；設定 SHARKS_LANG=en 可改用英文。";
 
@@ -95,6 +97,7 @@ pub const MAX_OTHERS: usize = 11;
 
 #[derive(Debug)]
 pub struct Options {
+    pub play: bool,
     pub shark: Option<SharkKind>,
     pub others: Option<Vec<SharkKind>>,
     pub count: usize,
@@ -111,6 +114,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Options {
+            play: false,
             shark: None,
             others: None,
             count: 3,
@@ -185,6 +189,7 @@ pub fn parse_from(args: impl IntoIterator<Item = String>) -> Result<Options, Sto
                 let list = SharkKind::ALL.map(|k| format!("{:<12} {}", k.name(), k.label(zh())));
                 return Err(Stop::Print(list.join("\n")));
             }
+            "-p" | "--play" => o.play = true,
             "-k" | "--shark" => {
                 let name = value()?;
                 o.shark = Some(SharkKind::parse(&name).ok_or_else(|| unknown_kind(&name))?);
@@ -261,6 +266,7 @@ mod tests {
         assert_eq!(o.others, Some(vec![SharkKind::Tiger, SharkKind::Zebra]));
         assert_eq!(o.count, 0);
         assert_eq!(parse(&[]).unwrap().count, 3);
+        assert!(parse(&["-p"]).unwrap().play);
     }
 
     #[test]
