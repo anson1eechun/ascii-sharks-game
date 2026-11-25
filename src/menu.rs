@@ -312,8 +312,8 @@ impl Menu {
         let (cols, rows) = (grid.cols, grid.rows);
         let n = TITLE.len();
         let card = cols >= MENU_W + GAP + CARD_W + 4;
-        let logo = rows >= n + 4 + ui::LOGO_ROWS + 7 && cols >= 32;
-        let head = if logo { ui::LOGO_ROWS + 3 } else { 3 };
+        let logo = rows >= n + 4 + ui::LOGO_ROWS + 6 && cols >= 32;
+        let head = if logo { ui::LOGO_ROWS + 2 } else { 2 };
         let spacing = if rows >= head + 2 * n + 6 { 2 } else { 1 };
         let items_h = (n - 1) * spacing + 1;
         let slab_h = items_h + 4;
@@ -323,15 +323,6 @@ impl Menu {
         } else {
             ui::centre(grid, top, "S H A R K S", GOLD);
         }
-        ui::centre(
-            grid,
-            top + head - 2,
-            self.t(
-                "eat fish · grow · rule the sea",
-                "吃魚 · 長大 · 成為海裡最大的鯊魚",
-            ),
-            DIM,
-        );
         let width = if card {
             MENU_W + GAP + CARD_W
         } else {
