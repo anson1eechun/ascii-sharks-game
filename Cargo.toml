@@ -1,0 +1,20 @@
+[package]
+name = "sharks-game"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+description = "A terminal game: steer an ASCII shark, eat fish, grow into the biggest shark in the sea"
+repository = "https://github.com/anson1eechun/ascii-sharks-game"
+keywords = ["ascii", "terminal", "game", "tui", "shark"]
+categories = ["games", "command-line-utilities"]
+
+[dependencies]
+libc = "0.2"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
